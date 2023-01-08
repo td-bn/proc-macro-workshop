@@ -1,10 +1,14 @@
-use syn::{Data, Fields, GenericArgument, Ident, PathArguments, PathSegment, Type};
+use syn::{
+    Data, Fields, GenericArgument, Ident, Lit, LitStr, Meta, NestedMeta, PathArguments,
+    PathSegment, Type,
+};
 
 pub struct FieldInfo<'a> {
     pub name: &'a Option<Ident>,
     pub ty: &'a Type,
     pub is_optional: bool,
     pub inner: Option<Ident>,
+    pub each: Option<String>,
 }
 
 pub fn first_path_segment(ty: &Type) -> Option<&PathSegment> {
@@ -24,6 +28,26 @@ pub fn first_generic_arg(args: &PathArguments) -> Option<&PathSegment> {
             }
         }
         _ => None,
+    }
+}
+
+fn match_meta(m: Meta) -> LitStr {
+    match m {
+        Meta::List(l) => match l.nested.first().unwrap() {
+            NestedMeta::Meta(m) => match_meta(m.to_owned()),
+            _ => unimplemented!(),
+        },
+        Meta::NameValue(nv) => {
+            let path = nv.path;
+            let lit = nv.lit;
+            let _ident = path.segments.first().unwrap().ident.clone();
+            let each_name = match lit {
+                Lit::Str(s) => s,
+                _ => unimplemented!(),
+            };
+            each_name
+        }
+        _ => unimplemented!(),
     }
 }
 
@@ -47,11 +71,21 @@ pub fn parse_fields(data: &Data) -> Vec<FieldInfo> {
                     } else {
                         None
                     };
+
+                    let each_name = match f.attrs.is_empty() {
+                        false => {
+                            let n = match_meta(f.attrs.first().unwrap().parse_meta().unwrap());
+                            Some(n.value())
+                        }
+                        true => None,
+                    };
+
                     FieldInfo {
                         name,
                         ty,
                         is_optional,
                         inner,
+                        each: each_name,
                     }
                 })
                 .collect(),
