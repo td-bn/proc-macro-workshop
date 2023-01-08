@@ -1,6 +1,7 @@
 use quote::{quote, quote_spanned};
-use syn::{Ident, spanned::Spanned};
-
+use syn::{
+    spanned::Spanned, GenericArgument, Ident, PathArguments, Type,
+};
 
 use super::fields::FieldInfo;
 
@@ -33,8 +34,14 @@ pub fn init_builder_struct(
 ) -> proc_macro2::TokenStream {
     let recurse = fields.iter().map(|f| {
         let name = f.name;
-        quote_spanned! { name.span()=>
-            #name: None,
+        if f.each.is_some() {
+            quote_spanned! { name.span()=>
+                #name: Some(vec![]),
+            }
+        } else {
+            quote_spanned! { name.span()=>
+                #name: None,
+            }
         }
     });
     quote! {
@@ -45,6 +52,22 @@ pub fn init_builder_struct(
     .into()
 }
 
+fn get_nested_type(ty: &Type) -> Type {
+    match ty {
+        Type::Path(tp) => {
+            let outer = tp.path.segments.first().unwrap();
+            match outer.arguments.clone() {
+                PathArguments::AngleBracketed(aba) => match aba.args.first().unwrap() {
+                    GenericArgument::Type(t) => t.to_owned(),
+                    _ => unimplemented!(),
+                },
+                _ => unimplemented!(),
+            }
+        }
+        _ => unimplemented!(),
+    }
+}
+
 fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
     let recurse = fields.iter().map(|f| {
         let name = f.name;
@@ -52,17 +75,44 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
         let is_optional = f.is_optional;
         let inner = &f.inner;
         if is_optional {
-            quote_spanned! { name.span()=>
+            quote! {
                 pub fn #name(&mut self, #name: #inner) -> &mut Self {
                     self.#name = Some(#name);
                     self
                 }
             }
         } else {
-            quote_spanned! { name.span()=>
-                pub fn #name(&mut self, #name: #ty) -> &mut Self {
-                    self.#name = Some(#name);
-                    self
+            match f.each.clone() {
+                Some(each_name) => {
+                    let each_id = Ident::new(&each_name, name.span());
+                    let nested_type = get_nested_type(ty);
+                    let outer_fn = if each_name != name.clone().unwrap().to_string() {
+                        quote! {
+                            pub fn #name(&mut self, #name: #ty) -> &mut Self {
+                                self.#name = Some(#name);
+                                self
+                            }
+                        }
+                    } else {
+                        proc_macro2::TokenStream::new()
+                    };
+                    quote! {
+                        pub fn #each_id(&mut self, #each_id: #nested_type) -> &mut Self {
+                            if let Some(ref mut v) = self.#name {
+                                v.push(#each_id);
+                            }
+                            self
+                        }
+                        #outer_fn
+                    }
+                }
+                None => {
+                    quote! {
+                        pub fn #name(&mut self, #name: #ty) -> &mut Self {
+                            self.#name = Some(#name);
+                            self
+                        }
+                    }
                 }
             }
         }
@@ -71,7 +121,6 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
         #(#recurse)*
     }
 }
-
 
 fn gen_build(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
     let unwrap_build = fields.iter().map(|f| {
@@ -97,7 +146,6 @@ fn gen_build(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
         #(#unwrap_build)*
     }
 }
-
 
 pub fn impl_builder(
     fields: &Vec<FieldInfo>,
