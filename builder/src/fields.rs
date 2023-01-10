@@ -8,7 +8,7 @@ pub struct FieldInfo<'a> {
     pub ty: &'a Type,
     pub is_optional: bool,
     pub inner: Option<Ident>,
-    pub each: Option<String>,
+    pub each: Option<(Ident, LitStr)>,
 }
 
 pub fn first_path_segment(ty: &Type) -> Option<&PathSegment> {
@@ -31,7 +31,7 @@ pub fn first_generic_arg(args: &PathArguments) -> Option<&PathSegment> {
     }
 }
 
-fn match_meta(m: Meta) -> LitStr {
+fn match_meta(m: Meta) -> (Ident, LitStr) {
     match m {
         Meta::List(l) => match l.nested.first().unwrap() {
             NestedMeta::Meta(m) => match_meta(m.to_owned()),
@@ -40,9 +40,9 @@ fn match_meta(m: Meta) -> LitStr {
         Meta::NameValue(nv) => {
             let path = nv.path;
             let lit = nv.lit;
-            let _ident = path.segments.first().unwrap().ident.clone();
+            let ident = path.segments.first().unwrap().ident.clone();
             let each_name = match lit {
-                Lit::Str(s) => s,
+                Lit::Str(s) => (ident, s),
                 _ => unimplemented!(),
             };
             each_name
@@ -75,7 +75,7 @@ pub fn parse_fields(data: &Data) -> Vec<FieldInfo> {
                     let each_name = match f.attrs.is_empty() {
                         false => {
                             let n = match_meta(f.attrs.first().unwrap().parse_meta().unwrap());
-                            Some(n.value())
+                            Some(n)
                         }
                         true => None,
                     };

@@ -1,6 +1,6 @@
 use quote::{quote, quote_spanned};
 use syn::{
-    spanned::Spanned, GenericArgument, Ident, PathArguments, Type,
+    spanned::Spanned, GenericArgument, Ident, PathArguments, Type, Error
 };
 
 use super::fields::FieldInfo;
@@ -83,7 +83,11 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
             }
         } else {
             match f.each.clone() {
-                Some(each_name) => {
+                Some((ident, str_lit)) => {
+                    if ident != "each" {
+                        return Error::new(ident.span(), r#"expected `builder(each = "...")`"#).into_compile_error();
+                    }
+                    let each_name = str_lit.value();
                     let each_id = Ident::new(&each_name, name.span());
                     let nested_type = get_nested_type(ty);
                     let outer_fn = if each_name != name.clone().unwrap().to_string() {
