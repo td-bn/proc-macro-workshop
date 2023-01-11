@@ -3,6 +3,8 @@ use syn::{
     PathSegment, Type,
 };
 
+type Option<T> = std::option::Option<T>;
+
 pub struct FieldInfo<'a> {
     pub name: &'a Option<Ident>,
     pub ty: &'a Type,
@@ -11,10 +13,11 @@ pub struct FieldInfo<'a> {
     pub each: Option<(Ident, LitStr)>,
 }
 
+
 pub fn first_path_segment(ty: &Type) -> Option<&PathSegment> {
     match ty {
         Type::Path(tp) => tp.path.segments.first(),
-        _ => None,
+        _ => Option::None,
     }
 }
 
@@ -24,10 +27,10 @@ pub fn first_generic_arg(args: &PathArguments) -> Option<&PathSegment> {
             let gen_arg = abg_args.args.first().unwrap();
             match gen_arg {
                 GenericArgument::Type(t) => first_path_segment(t),
-                _ => None,
+                _ => Option::None,
             }
         }
-        _ => None,
+        _ => Option::None,
     }
 }
 
@@ -67,17 +70,17 @@ pub fn parse_fields(data: &Data) -> Vec<FieldInfo> {
                         let ident = &first_generic_arg(&first_path_segment.arguments)
                             .unwrap()
                             .ident;
-                        Some(ident.to_owned())
+                        Option::Some(ident.to_owned())
                     } else {
-                        None
+                        Option::None
                     };
 
                     let each_name = match f.attrs.is_empty() {
                         false => {
                             let n = match_meta(f.attrs.first().unwrap().parse_meta().unwrap());
-                            Some(n)
+                            Option::Some(n)
                         }
-                        true => None,
+                        true => Option::None,
                     };
 
                     FieldInfo {

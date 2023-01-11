@@ -6,6 +6,7 @@ use syn::{
 use super::fields::FieldInfo;
 
 pub fn get_builder_struct(fields: &Vec<FieldInfo>, name: &Ident) -> proc_macro2::TokenStream {
+
     let recurse = fields.iter().map(|f| {
         let name = f.name;
         let ty = f.ty;
@@ -16,11 +17,12 @@ pub fn get_builder_struct(fields: &Vec<FieldInfo>, name: &Ident) -> proc_macro2:
             }
         } else {
             quote_spanned! { name.span()=>
-                #name: Option<#ty>,
+                #name: std::option::Option<#ty>,
             }
         }
     });
     quote! {
+        type String = std::string::String;
         pub struct #name {
             #(#recurse)*
         }
@@ -36,11 +38,11 @@ pub fn init_builder_struct(
         let name = f.name;
         if f.each.is_some() {
             quote_spanned! { name.span()=>
-                #name: Some(vec![]),
+                #name: std::option::Option::Some(vec![]),
             }
         } else {
             quote_spanned! { name.span()=>
-                #name: None,
+                #name: std::option::Option::None,
             }
         }
     });
@@ -77,13 +79,13 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
         if is_optional {
             quote! {
                 pub fn #name(&mut self, #name: #inner) -> &mut Self {
-                    self.#name = Some(#name);
+                    self.#name = std::option::Option::Some(#name);
                     self
                 }
             }
         } else {
             match f.each.clone() {
-                Some((ident, str_lit)) => {
+                Option::Some((ident, str_lit)) => {
                     if ident != "each" {
                         return Error::new(ident.span(), r#"expected `builder(each = "...")`"#).into_compile_error();
                     }
@@ -93,7 +95,7 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
                     let outer_fn = if each_name != name.clone().unwrap().to_string() {
                         quote! {
                             pub fn #name(&mut self, #name: #ty) -> &mut Self {
-                                self.#name = Some(#name);
+                                self.#name = std::option::Option::Some(#name);
                                 self
                             }
                         }
@@ -102,7 +104,7 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
                     };
                     quote! {
                         pub fn #each_id(&mut self, #each_id: #nested_type) -> &mut Self {
-                            if let Some(ref mut v) = self.#name {
+                            if let std::option::Option::Some(ref mut v) = self.#name {
                                 v.push(#each_id);
                             }
                             self
@@ -110,10 +112,10 @@ fn gen_setters(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
                         #outer_fn
                     }
                 }
-                None => {
+                Option::None => {
                     quote! {
                         pub fn #name(&mut self, #name: #ty) -> &mut Self {
-                            self.#name = Some(#name);
+                            self.#name = std::option::Option::Some(#name);
                             self
                         }
                     }
@@ -139,8 +141,8 @@ fn gen_build(fields: &Vec<FieldInfo>) -> proc_macro2::TokenStream {
         } else {
             quote_spanned! { name.span()=>
                 #name: match &self.#name {
-                    Some(v) => v.to_owned(),
-                    None => return Err(#error_message.into())
+                    std::option::Option::Some(v) => v.to_owned(),
+                    std::option::Option::None => return Err(#error_message.into())
                 },
             }
         }
@@ -163,7 +165,7 @@ pub fn impl_builder(
         impl #builder_name {
             #setters
 
-            pub fn build(&mut self) -> Result<#struct_name, Box<dyn std::error::Error>> {
+            pub fn build(&mut self) -> std::result::Result<#struct_name, std::boxed::Box<dyn std::error::Error>> {
                 let s = #struct_name {
                     #unwrap_build
                 };
