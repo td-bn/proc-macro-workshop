@@ -8,9 +8,6 @@ use syn::{parse_macro_input, DeriveInput};
 use builder_struct::*;
 use fields::parse_fields;
 
-#[allow(dead_code)]
-type Option<T> = std::option::Option<T>;
-
 #[proc_macro_derive(Builder, attributes(builder))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

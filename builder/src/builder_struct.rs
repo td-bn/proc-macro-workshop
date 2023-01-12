@@ -5,6 +5,8 @@ use syn::{
 
 use super::fields::FieldInfo;
 
+type Option<T> = std::option::Option<T>;
+
 pub fn get_builder_struct(fields: &Vec<FieldInfo>, name: &Ident) -> proc_macro2::TokenStream {
 
     let recurse = fields.iter().map(|f| {
