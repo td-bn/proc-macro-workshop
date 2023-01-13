@@ -1,12 +1,15 @@
-use proc_macro::{TokenStream};
+mod fields;
 
+use proc_macro::TokenStream;
+
+use fields::*;
 use quote::{quote, quote_spanned};
-use syn::{DeriveInput, parse_macro_input, Ident, Type, Data, Fields};
+use syn::{parse_macro_input, DeriveInput, Ident};
 
-#[proc_macro_derive(CustomDebug)]
+#[proc_macro_derive(CustomDebug, attributes(debug))]
 pub fn derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    
+
     let name = input.ident;
 
     let fields = parse_fields(&input.data);
@@ -19,43 +22,24 @@ pub fn derive(input: TokenStream) -> TokenStream {
     tokens.into()
 }
 
-struct FieldInfo<'a> {
-    name: &'a Option<Ident>,
-    #[allow(dead_code)]
-    ty: &'a Type,
-}
-
-fn parse_fields(data: &Data) -> Vec<FieldInfo> {
-    match *data {
-        Data::Struct(ref data) => match data.fields {
-            // Fields::Named(ref fields) => fields.clone(),
-            Fields::Named(ref fields) => fields
-                .named
-                .iter()
-                .map(|f| {
-                    let name = &f.ident;
-                    let ty = &f.ty;
-
-                    FieldInfo {
-                        name,
-                        ty,
-                    }
-                })
-                .collect(),
-            _ => unimplemented!(),
-        },
-        _ => unimplemented!(),
-    }
-}
-
 fn impl_debug(fields: Vec<FieldInfo>, name: &Ident) -> proc_macro2::TokenStream {
     let struct_name = format!("{}", name);
-    
+
     let recurse = fields.iter().map(|f| {
         if let Some(name) = f.name {
             let name_string = format!("{}", name);
-            quote_spanned!{name.span()=>
-                .field(#name_string, &self.#name)
+            match &f.debug_attr {
+                Some((_i, str_lit)) => {
+                    let s = str_lit.value();
+                    quote_spanned! {name.span()=>
+                        .field(#name_string, &format_args!(#s, &self.#name))
+                    }
+                },
+                None => {
+                        quote_spanned! {name.span()=>
+                            .field(#name_string, &self.#name)
+                        }
+                },
             }
         } else {
             quote!()
